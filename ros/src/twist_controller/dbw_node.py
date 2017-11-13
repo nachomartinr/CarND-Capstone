@@ -55,9 +55,18 @@ class DBWNode(object):
 
         # TODO: Create `TwistController` object
         # self.controller = TwistController(<Arguments you wish to provide>)
+	self.car_controller = Controller(wheel_base, steer_ratio, 1., max_lat_accel, max_steer_angle)
 
         # TODO: Subscribe to all the topics you need to
-
+	rospy.Subscriber('/twist_cmd', TwistStamped, self.command_cb)
+	rospy.Subscriber('/current_velocity', TwistStamped, self.velocity_cb)
+	rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_state_cb)
+	# Add other member variables
+	self.current_velocity = 0
+	self.target_velocity =  0
+	self.current_angular_velocity = 0
+	self.target_angular_velocity = 0
+	self.dbw_state = False
         self.loop()
 
     def loop(self):
@@ -70,8 +79,14 @@ class DBWNode(object):
             #                                                     <current linear velocity>,
             #                                                     <dbw status>,
             #                                                     <any other argument you need>)
-            # if <dbw is enabled>:
-            #   self.publish(throttle, brake, steer)
+            if self.dbw_state is True:
+	        throttle, brake, steering = self.car_controller.control(self.target_velocity, self.target_angular_velocity, self.current_velocity)
+	        self.publish(throttle, brake, steering)
+		#rospy.logwarn('target_velocity: %s, throttle: %s', self.target_velocity, throttle)
+		#self.publish(1., .0, steering)
+	    else :
+		self.car_controller.speed_controller.reset()
+	    
             rate.sleep()
 
     def publish(self, throttle, brake, steer):
@@ -91,6 +106,27 @@ class DBWNode(object):
         bcmd.pedal_cmd_type = BrakeCmd.CMD_TORQUE
         bcmd.pedal_cmd = brake
         self.brake_pub.publish(bcmd)
+
+    def command_cb(self, cmd):
+	vx = cmd.twist.linear.x
+	az = cmd.twist.angular.z
+	
+	self.target_velocity = vx
+	self.target_angular_velocity = az
+	
+
+    def velocity_cb(self, vel):	
+	vx = vel.twist.linear.x
+	az = vel.twist.angular.z
+
+	self.current_velocity = vx
+	self.current_angular_velocity = az
+
+    def dbw_state_cb(self, dbw):
+	self.dbw_state = dbw.data
+	rospy.logwarn('dbw_state: %s', self.dbw_state)
+	
+	
 
 
 if __name__ == '__main__':
