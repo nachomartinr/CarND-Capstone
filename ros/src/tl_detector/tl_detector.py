@@ -23,6 +23,10 @@ class TLDetector(object):
         self.camera_image = None
         self.lights = []
 
+	config_string = rospy.get_param("/traffic_light_config")
+        self.config = yaml.load(config_string)
+	self.traffic_line_index = []
+	self.traffic_light_index = []
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
@@ -34,14 +38,6 @@ class TLDetector(object):
         rely on the position of the light and the camera image to predict it.
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
-        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
-
-        config_string = rospy.get_param("/traffic_light_config")
-        self.config = yaml.load(config_string)
-	self.traffic_line_index = []
-	self.traffic_light_index = []
-        
-        self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
         self.light_classifier = TLClassifier()
@@ -51,6 +47,9 @@ class TLDetector(object):
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
+
+	sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
+	self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         rospy.spin()
 
@@ -155,6 +154,7 @@ class TLDetector(object):
             return False
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+	cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
 
         #Get classification
         return self.light_classifier.get_classification(cv_image)
@@ -182,6 +182,12 @@ class TLDetector(object):
 		    traffic_line_index = self.traffic_line_index[i]
 		    if (len(self.traffic_light_index) is not 0 and len(self.lights) is not 0):    
 			traffic_light_state = self.lights[self.traffic_light_index[i]].state
+			rospy.logwarn('Truth: %s', traffic_light_state)
+			start_time = rospy.Time.now().to_sec()
+			traffic_light_state = self.get_light_state(light)
+			end_time = rospy.Time.now().to_sec()
+	    		rospy.logwarn('Elapse time: %s',end_time-start_time) 
+			rospy.logwarn('Detect: %s', traffic_light_state)
 		    #rospy.logwarn('There is a traffic light ahead! line index is: %s, light state is: %s', traffic_line_index, traffic_light_state)
 
         #TODO find the closest visible traffic light (if one exists)

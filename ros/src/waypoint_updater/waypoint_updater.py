@@ -131,7 +131,7 @@ class WaypointUpdater(object):
 
     def traffic_cb(self, position):
 	self.traffic_position = position.data
-	rospy.logwarn('sotp line ahead is: %s', self.traffic_position)
+	#rospy.logwarn('sotp line ahead is: %s', self.traffic_position)
 
 if __name__ == '__main__':
     try:
