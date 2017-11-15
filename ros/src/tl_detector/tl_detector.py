@@ -7,6 +7,7 @@ from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifier
+from light_classification.color_classifier import ColorClassifier
 import tf
 import cv2
 import yaml
@@ -25,6 +26,7 @@ class TLDetector(object):
 	#traffic light
         self.lights = []
 	self.traffic_light_index = []
+	self.signal_classes = ['Red', 'Yellow', 'Green', 'Unknow'] 
 	sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
 
 	#position
@@ -59,6 +61,7 @@ class TLDetector(object):
         self.i =0
 	#load classifier,time comsuming
 	self.light_classifier = TLClassifier()
+	self.color_Classifier = ColorClassifier()
 
 	#set spin rate according to time required for classification
 	rate = rospy.Rate(5)
@@ -177,9 +180,16 @@ class TLDetector(object):
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
 	#cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+	box_coords = self.light_classifier.get_classification(cv_image)
+	if len(box_coords)>0:
+            bot, left, top, right = box_coords[0, ...]
+            img = cv_image[int(bot):int(top), int(left):int(right)]	    
+	    state = self.color_Classifier.get_color(img)
+	else:
+	    state = TrafficLight.GREEN
 
         #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        return state
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -198,7 +208,7 @@ class TLDetector(object):
 	    car_position = self.position
 	    #chech if the ego car is close to one traffic line
 	    for i in range(len(self.traffic_line_index)):
-	        if (self.traffic_line_index[i]-car_position)%len(self.waypoints.waypoints)<50:
+	        if (self.traffic_line_index[i]-car_position)%len(self.waypoints.waypoints)<75:
 		    traffic_line_index = self.traffic_line_index[i]
 		    if (len(self.traffic_light_index) is not 0 and len(self.lights) is not 0 and self.has_image):    
 			traffic_light_gt = self.lights[self.traffic_light_index[i]].state			
@@ -206,7 +216,7 @@ class TLDetector(object):
 			#TODO find the closest visible traffic light (if one exists)
 			traffic_light_state = self.get_light_state(light)
 			time = rospy.Time.now().to_sec()-time
-			rospy.logwarn('Used time: %4.2f, Ground truth: %s, Detect: %s', time, traffic_light_gt, traffic_light_state)
+			rospy.logwarn('Used time: %4.2f, Ground truth: %s, Detect: %s', time, self.signal_classes[traffic_light_gt], self.signal_classes[traffic_light_state])
 		    
         return traffic_line_index, traffic_light_state
 

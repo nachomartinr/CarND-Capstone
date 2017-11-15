@@ -3,13 +3,14 @@ import cv2
 from styx_msgs.msg import TrafficLight
 import tensorflow as tf
 import numpy as np
-#from PIL import Image
-from PIL import ImageDraw
-from PIL import ImageColor
+
+
 
 class TLClassifier(object):
     def __init__(self):
         #TODO load classifier
+
+	#load traffic light classifer
 	SSD_GRAPH_FILE = 'ssd_mobilenet_v1_coco_11_06_2017/frozen_inference_graph.pb'
 	self.detection_graph = self.load_graph(SSD_GRAPH_FILE)	
 	# The input placeholder for the image.
@@ -29,6 +30,7 @@ class TLClassifier(object):
 	config = tf.ConfigProto()
 	config.gpu_options.allow_growth = True
 	self.sess = tf.Session(graph=self.detection_graph, config=config)
+	
 
     def get_classification(self, image):
         """Determines the color of the traffic light in the image
@@ -58,40 +60,8 @@ class TLClassifier(object):
     	    # This converts the coordinates actual location on the image.
     	    height, width, _= image.shape
     	    box_coords = self.to_image_coords(boxes, height, width)
-	    #image = self.draw_boxes(image, box_coords, thickness=4)
-	    #image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-	    #bot, left, top, right = box_coords[0, ...]
-	    
-	    #image = image[int(bot):int(top), int(left):int(right)]
-	    state = TrafficLight.GREEN  
-	    if len(box_coords)>0:
-        	bot, left, top, right = box_coords[0, ...]
-        	img = image[int(bot):int(top), int(left):int(right)]
-        	hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
-        	H = hls[:,:,0]
-        	L = hls[:,:,1]
-        	S = hls[:,:,2]
-        
-        	H_r_thresh = (160, 190)
-        	H_y_thresh = (10, 40)
-        	L_thresh = (100, 255)
-        	binary = np.zeros_like(S)
 
-        	binary[ (((H > H_r_thresh[0]) & (H <= H_r_thresh[1])) | ((H > H_y_thresh[0]) & (H <= H_y_thresh[1]))) & ((L > L_thresh[0]) & (L <= L_thresh[1])) ] = 1
-		percent = float( sum(sum(binary)) ) / float( binary.shape[0]*binary.shape[1] )
-        	if percent>0.02:
-		    #cv2.putText(img, 'S',(0,100), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)  
-            	    state = TrafficLight.RED
-       		else:
-		    #cv2.putText(img, 'G',(0,100), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
-            	    state = TrafficLight.GREEN   
-     	    else:
-        	state = TrafficLight.GREEN  
-	    #name = str(self.i)+'.jpg'
-	    #cv2.imwrite('/home/student/CarND-Capstone/ros/'+name, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-	    #self.i += 1
-
-        return state
+        return box_coords
 
     def filter_boxes(self, min_score, boxes, scores, classes):
         """Return boxes with a confidence >= `min_score`"""
@@ -146,3 +116,5 @@ class TLClassifier(object):
             color = 'red'
             cv2.rectangle(image,(left, bot), (right, top), [255,0,0], thickness=4)
 	return image
+
+
