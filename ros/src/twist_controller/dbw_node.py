@@ -82,8 +82,6 @@ class DBWNode(object):
             if self.dbw_state is True:
 	        throttle, brake, steering = self.car_controller.control(self.target_velocity, self.target_angular_velocity, self.current_velocity)
 	        self.publish(throttle, brake, steering)
-		#rospy.logwarn('target_velocity: %s, throttle: %s', self.target_velocity, throttle)
-		#self.publish(1., .0, steering)
 	    else :
 		self.car_controller.speed_controller.reset()
 	    
@@ -126,8 +124,6 @@ class DBWNode(object):
 	self.dbw_state = dbw.data
 	rospy.logwarn('dbw_state: %s', self.dbw_state)
 	
-	
-
 
 if __name__ == '__main__':
     DBWNode()

@@ -10,7 +10,6 @@ from PIL import ImageColor
 class TLClassifier(object):
     def __init__(self):
         #TODO load classifier
-	self.i = 0
 	SSD_GRAPH_FILE = 'ssd_mobilenet_v1_coco_11_06_2017/frozen_inference_graph.pb'
 	self.detection_graph = self.load_graph(SSD_GRAPH_FILE)	
 	# The input placeholder for the image.
@@ -26,6 +25,7 @@ class TLClassifier(object):
 
 	# The classification of the object (integer id).
 	self.detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
+	
 	config = tf.ConfigProto()
 	config.gpu_options.allow_growth = True
 	self.sess = tf.Session(graph=self.detection_graph, config=config)
@@ -40,21 +40,17 @@ class TLClassifier(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-	
 	image_np = np.expand_dims(np.asarray(image, dtype=np.uint8), 0)
 	# Actual detection.
 	with self.detection_graph.as_default():
-	    #rospy.logwarn('begin')
-	    
     	    (boxes, scores, classes) = self.sess.run([self.detection_boxes, self.detection_scores, self.detection_classes], feed_dict={self.image_tensor: image_np})
-	    
-	    #rospy.logwarn('end')
+
     	    # Remove unnecessary dimensions
     	    boxes = np.squeeze(boxes)
     	    scores = np.squeeze(scores)
     	    classes = np.squeeze(classes)
 
-    	    confidence_cutoff = 0.3
+    	    confidence_cutoff = 0.2
     	    # Filter boxes with a confidence score less than `confidence_cutoff`
     	    boxes, scores, classes = self.filter_boxes(confidence_cutoff, boxes, scores, classes)
 	    
@@ -83,22 +79,17 @@ class TLClassifier(object):
 
         	binary[ (((H > H_r_thresh[0]) & (H <= H_r_thresh[1])) | ((H > H_y_thresh[0]) & (H <= H_y_thresh[1]))) & ((L > L_thresh[0]) & (L <= L_thresh[1])) ] = 1
 		percent = float( sum(sum(binary)) ) / float( binary.shape[0]*binary.shape[1] )
-		#rospy.logwarn('percent: %s', percent) 
         	if percent>0.02:
-		    cv2.putText(img, 'S',(0,100), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)  
+		    #cv2.putText(img, 'S',(0,100), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)  
             	    state = TrafficLight.RED
-		    #rospy.logwarn('STOP!')
        		else:
-		    cv2.putText(img, 'G',(0,100), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
+		    #cv2.putText(img, 'G',(0,100), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
             	    state = TrafficLight.GREEN   
-		    #rospy.logwarn('Green light,GO!')            
-    	    else:
+     	    else:
         	state = TrafficLight.GREEN  
-		#rospy.logwarn('No light,GO!')
-	    name = str(self.i)+'.jpg'
-
+	    #name = str(self.i)+'.jpg'
 	    #cv2.imwrite('/home/student/CarND-Capstone/ros/'+name, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-	    self.i += 1
+	    #self.i += 1
 
         return state
 
@@ -115,7 +106,6 @@ class TLClassifier(object):
                 index = i
     
         if index is not None:
-	    #rospy.logwarn('traffic liaght detected')
 	    idxs.append(index)
     
         filtered_boxes = boxes[idxs, ...]

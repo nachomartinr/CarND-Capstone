@@ -17,19 +17,31 @@ STATE_COUNT_THRESHOLD = 3
 class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
-
-        self.pose = None
-        self.waypoints = None
-        self.camera_image = None
-        self.lights = []
-
+	#stop line
+	self.traffic_line_index = []
 	config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
-	self.traffic_line_index = []
+
+	#traffic light
+        self.lights = []
 	self.traffic_light_index = []
+	sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
+
+	#position
+	self.position = None
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
+
+	#waypoints
+        self.waypoints = None
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
+	#camera_image
+        self.camera_image = None
+	self.has_image = False
+	sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
+
+	self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
+	self.car_position = rospy.Publisher('/car_position', Int32, queue_size=1)
         '''
         /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and
         helps you acquire an accurate ground truth data source for the traffic light
@@ -37,37 +49,66 @@ class TLDetector(object):
         simulator. When testing on the vehicle, the color state will not be available. You'll need to
         rely on the position of the light and the camera image to predict it.
         '''
-        sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
         self.listener = tf.TransformListener()
-
         self.state = TrafficLight.UNKNOWN
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
+        self.i =0
+	#load classifier,time comsuming
+	self.light_classifier = TLClassifier()
 
-	sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
-	self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
+	#set spin rate according to time required for classification
+	rate = rospy.Rate(5)
+	start_time = 0
+	while not start_time:
+	    start_time = rospy.Time.now().to_sec()
 
-        rospy.spin()
+	while not rospy.is_shutdown():
+	    self.detect_tl()
+	    rate.sleep()
+
+    def detect_tl(self):
+	light_wp, state = self.process_traffic_lights()
+        '''
+        Publish upcoming red lights at camera frequency.
+        Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
+        of times till we start using it. Otherwise the previous stable state is
+        used.
+        '''
+        if self.state != state:
+            self.state_count = 0
+            self.state = state
+        elif self.state_count >= STATE_COUNT_THRESHOLD:
+            self.last_state = self.state
+            light_wp = light_wp if (state == TrafficLight.RED or state == TrafficLight.YELLOW) else -1
+            self.last_wp = light_wp
+            self.upcoming_red_light_pub.publish(Int32(light_wp))
+        else:
+            self.upcoming_red_light_pub.publish(Int32(self.last_wp))
+        self.state_count += 1
 
     def pose_cb(self, msg):
-        self.pose = msg
+	#find position of the ego car
+	if(self.waypoints):
+	    self.position = self.get_closest_waypoint(msg.pose.position.x, msg.pose.position.y, msg.pose.position.z)
+	    self.car_position.publish(Int32(self.position))
+	    
 
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
-
+	#record position of the stop line
 	stop_line_positions = self.config['stop_line_positions']
 	for i in range(len(stop_line_positions)):
 	    traffic_light_position = self.get_closest_waypoint(stop_line_positions[i][0], stop_line_positions[i][1], 0)
-	    #rospy.logwarn('traffic_light_position: %s', traffic_light_position)
 	    self.traffic_line_index.append(traffic_light_position)
 	    
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
+	#record position of the traffic light
 	if ( len(self.traffic_light_index) is 0 and len(self.traffic_line_index) is not 0):
 
 	    for i in range(len(self.traffic_line_index)):
@@ -95,26 +136,7 @@ class TLDetector(object):
         """
         self.has_image = True
         self.camera_image = msg
-        light_wp, state = self.process_traffic_lights()
-
-        '''
-        Publish upcoming red lights at camera frequency.
-        Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
-        of times till we start using it. Otherwise the previous stable state is
-        used.
-        '''
-        if self.state != state:
-            self.state_count = 0
-            self.state = state
-        elif self.state_count >= STATE_COUNT_THRESHOLD:
-            self.last_state = self.state
-            light_wp = light_wp if (state == TrafficLight.RED or state == TrafficLight.YELLOW) else -1
-            self.last_wp = light_wp
-            self.upcoming_red_light_pub.publish(Int32(light_wp))
-        else:
-            self.upcoming_red_light_pub.publish(Int32(self.last_wp))
-        self.state_count += 1
-
+        
     def get_closest_waypoint(self, px, py, pz):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
@@ -153,8 +175,8 @@ class TLDetector(object):
             self.prev_light_loc = None
             return False
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-	cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
+	#cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
 
         #Get classification
         return self.light_classifier.get_classification(cv_image)
@@ -169,34 +191,23 @@ class TLDetector(object):
 
         """
         light = None
-
-        # List of positions that correspond to the line to stop in front of for a given intersection
-        #stop_line_positions = self.config['stop_line_positions']
 	
 	traffic_light_state = TrafficLight.UNKNOWN
 	traffic_line_index = -1
-        if(self.pose and self.waypoints):
-            car_position = self.get_closest_waypoint(self.pose.pose.position.x, self.pose.pose.position.y, self.pose.pose.position.z)
+        if(self.position):            
+	    car_position = self.position
+	    #chech if the ego car is close to one traffic line
 	    for i in range(len(self.traffic_line_index)):
-	        if (self.traffic_line_index[i]-car_position)%len(self.waypoints.waypoints)<100:
+	        if (self.traffic_line_index[i]-car_position)%len(self.waypoints.waypoints)<50:
 		    traffic_line_index = self.traffic_line_index[i]
-		    if (len(self.traffic_light_index) is not 0 and len(self.lights) is not 0):    
-			traffic_light_state = self.lights[self.traffic_light_index[i]].state
-			rospy.logwarn('Truth: %s', traffic_light_state)
-			start_time = rospy.Time.now().to_sec()
+		    if (len(self.traffic_light_index) is not 0 and len(self.lights) is not 0 and self.has_image):    
+			traffic_light_gt = self.lights[self.traffic_light_index[i]].state			
+			time = rospy.Time.now().to_sec()
+			#TODO find the closest visible traffic light (if one exists)
 			traffic_light_state = self.get_light_state(light)
-			end_time = rospy.Time.now().to_sec()
-	    		rospy.logwarn('Elapse time: %s',end_time-start_time) 
-			rospy.logwarn('Detect: %s', traffic_light_state)
-		    #rospy.logwarn('There is a traffic light ahead! line index is: %s, light state is: %s', traffic_line_index, traffic_light_state)
-
-        #TODO find the closest visible traffic light (if one exists)
-    
-
-        if light:
-            state = self.get_light_state(light)
-            return light_wp, state
-        #self.waypoints = None
+			time = rospy.Time.now().to_sec()-time
+			rospy.logwarn('Used time: %4.2f, Ground truth: %s, Detect: %s', time, traffic_light_gt, traffic_light_state)
+		    
         return traffic_line_index, traffic_light_state
 
 if __name__ == '__main__':

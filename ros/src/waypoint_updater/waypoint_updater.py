@@ -29,51 +29,29 @@ class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater')
 
-        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
 	rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+	rospy.Subscriber('/car_position', Int32, self.carpose_cb)
 	
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
 	self.base_waypoints = None
 	self.traffic_position = None
-	self.pos_index = 0
 	self.target_speed = 20
+	self.position = None
 	
         rospy.spin()
-
-    def pose_cb(self, msg):
-        # TODO: Implement
-        car_px = msg.pose.position.x
-	car_py = msg.pose.position.y
-	car_pz = msg.pose.position.z
-	car_qx = msg.pose.orientation.x
-	car_qy = msg.pose.orientation.y
-	car_qz = msg.pose.orientation.z
-	car_qw = msg.pose.orientation.w
-
-	phi = math.atan2(2*(car_qw*car_qx+car_qy*car_qz),1-2*(car_qx**2+car_qy**2))
-	theta = math.asin(2*(car_qw*car_qy-car_qz*car_qx))
-	psi = math.atan2(2*(car_qw*car_qz+car_qx*car_qy),1-2*(car_qy**2+car_qz**2))
-	
+    
+    def carpose_cb(self, msg):
+	self.position = msg.data
 	if self.base_waypoints:
-	    #find current car position
-	    wp_length = len(self.base_waypoints)	    
-	    nearest_dist = 99999
-	    for i in range(0, wp_length, 1):
-	        wp_px = self.base_waypoints[i].pose.pose.position.x
-	        wp_py = self.base_waypoints[i].pose.pose.position.y
-	        wp_pz = self.base_waypoints[i].pose.pose.position.z
-	        dist = math.sqrt((wp_px-car_px)**2 + (wp_py-car_py)**2  + (wp_pz-car_pz)**2)
-		#heading = math.atan2(wp_py-car_py, wp_px-car_px)
+	    wp_length = len(self.base_waypoints)
 
-	        if dist < nearest_dist: 
-		    nearest_dist = dist
-		    pos_index = i
 	    #generate waypoints that ego car will follow ahead    
+	    pos_index = self.position
 	    lane = Lane()
             lane.header.frame_id = '/world'
             lane.header.stamp = rospy.Time.now()
@@ -93,23 +71,22 @@ class WaypointUpdater(object):
 			safe_speed = math.sqrt(2*2*delta_s)
 			set_speed = min(self.target_speed, safe_speed)
 			self.set_waypoint_velocity(waypoints, i, set_speed)
-			#rospy.logwarn('traffic_position: %s, car_position: %s, delta_s: %s, safe_speed: %s, set_speed: %s,', self.traffic_position, pos_index, delta_s, safe_speed, set_speed)
 		    else:
 			self.set_waypoint_velocity(waypoints, i, self.target_speed)
 		else:
-		    self.set_waypoint_velocity(waypoints, i, 0) #if haven't got traffic condition, wait for safty reason
+		    #if haven't got traffic condition, wait for safty reason
+		    self.set_waypoint_velocity(waypoints, i, 0) 
             lane.waypoints = waypoints
 	    #publish waypoints  
 	    self.final_waypoints_pub.publish(lane)
-
-
+ 
     def waypoints_cb(self, waypoints):
         # TODO: Implement
 	self.base_waypoints = waypoints.waypoints        
 
-    def traffic_cb(self, msg):
+    def traffic_cb(self, position):
         # TODO: Callback for /traffic_waypoint message. Implement
-        pass
+	self.traffic_position = position.data
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -128,10 +105,6 @@ class WaypointUpdater(object):
             dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
             wp1 = i
         return dist
-
-    def traffic_cb(self, position):
-	self.traffic_position = position.data
-	#rospy.logwarn('sotp line ahead is: %s', self.traffic_position)
 
 if __name__ == '__main__':
     try:
