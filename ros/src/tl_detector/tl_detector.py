@@ -216,7 +216,7 @@ class TLDetector(object):
 	    car_position = self.position
 	    #chech if the ego car is close to one traffic line
 	    for i in range(len(self.traffic_line_index)):
-	        if (self.traffic_line_index[i]-car_position)%len(self.waypoints.waypoints)<75:
+	        if (self.traffic_line_index[i]-car_position)%len(self.waypoints.waypoints)<120:
 		    traffic_line_index = self.traffic_line_index[i]
 		    if (len(self.traffic_light_index) is not 0 and len(self.lights) is not 0 and self.has_image):    
 			traffic_light_gt = self.lights[self.traffic_light_index[i]].state			
