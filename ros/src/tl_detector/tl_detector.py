@@ -18,6 +18,7 @@ STATE_COUNT_THRESHOLD = 3
 class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
+	self.i = 0
 	#stop line
 	self.traffic_line_index = []
 	config_string = rospy.get_param("/traffic_light_config")
@@ -26,7 +27,7 @@ class TLDetector(object):
 	#traffic light
         self.lights = []
 	self.traffic_light_index = []
-	self.signal_classes = ['Red', 'Yellow', 'Green', 'Unknow'] 
+	self.signal_classes = ['STOP', 'STOP', 'GO', 'Unknown', 'Unknown'] 
 	sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
 
 	#position
@@ -62,7 +63,7 @@ class TLDetector(object):
 	#load classifier,time comsuming
 	self.light_classifier = TLClassifier()
 	self.color_Classifier = ColorClassifier()
-
+        rospy.logwarn('You can launch simulator now!')
 	#set spin rate according to time required for classification
 	rate = rospy.Rate(5)
 	start_time = 0
@@ -182,13 +183,20 @@ class TLDetector(object):
 	#cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
 	box_coords = self.light_classifier.get_classification(cv_image)
 	if len(box_coords)>0:
+	    #rospy.logwarn('traffic light detected')
             bot, left, top, right = box_coords[0, ...]
-            img = cv_image[int(bot):int(top), int(left):int(right)]	    
-	    state = self.color_Classifier.get_color(img)
+	    if ( (top-bot)*(right-left)>1500 ):
+                img = cv_image[int(bot):int(top), int(left):int(right)]	    
+	        state = self.color_Classifier.get_color(img)
+	        name = str(self.i)+'.jpg'
+	        #cv2.imwrite('/home/student/CarND-Capstone/ros/'+name,cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+	        #self.i +=1
+	    else:
+	        #rospy.logwarn('traffic light box is too small')
+		state = TrafficLight.UNKNOWN
 	else:
-	    state = TrafficLight.GREEN
-
-        #Get classification
+	    #rospy.logwarn('Cant find traffic light')
+	    state = TrafficLight.UNKNOWN
         return state
 
     def process_traffic_lights(self):
@@ -216,7 +224,7 @@ class TLDetector(object):
 			#TODO find the closest visible traffic light (if one exists)
 			traffic_light_state = self.get_light_state(light)
 			time = rospy.Time.now().to_sec()-time
-			rospy.logwarn('Used time: %4.2f, Ground truth: %s, Detect: %s', time, self.signal_classes[traffic_light_gt], self.signal_classes[traffic_light_state])
+			rospy.logwarn('Used time: %4.2f, Ground truth: %5s, Detected: %5s', time, self.signal_classes[traffic_light_gt], self.signal_classes[traffic_light_state])
 		    
         return traffic_line_index, traffic_light_state
 
