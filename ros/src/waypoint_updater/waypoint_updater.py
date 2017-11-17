@@ -64,7 +64,7 @@ class WaypointUpdater(object):
 		if (self.traffic_position):
 		    if (self.traffic_position is not -1):
 
-			delta_s = (self.traffic_position-3) - (pos_index+i)
+			delta_s = (self.traffic_position-4) - (pos_index+i)
 			if abs(delta_s%wp_length) < abs(delta_s):
 			    delta_s = delta_s%wp_length
 			delta_s = max(delta_s, 0)
