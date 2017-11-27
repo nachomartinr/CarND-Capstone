@@ -32,61 +32,63 @@ class WaypointUpdater(object):
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
-	rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
-	rospy.Subscriber('/car_position', Int32, self.carpose_cb)
-	
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        rospy.Subscriber('/car_position', Int32, self.carpose_cb)
+        
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
-	self.base_waypoints = None
-	self.traffic_position = None
-	self.target_speed = 20
-	self.position = None
-	
+        self.base_waypoints = None
+        self.traffic_position = None
+        #self.target_speed = 10
+
+        self.position = None
+        
         rospy.spin()
     
     def carpose_cb(self, msg):
-	self.position = msg.data
-	if self.base_waypoints:
-	    wp_length = len(self.base_waypoints)
+        self.position = msg.data
+        if self.base_waypoints:
+            wp_length = len(self.base_waypoints)
 
-	    #generate waypoints that ego car will follow ahead    
-	    pos_index = self.position
-	    lane = Lane()
+            #generate waypoints that ego car will follow ahead    
+            pos_index = self.position
+            lane = Lane()
             lane.header.frame_id = '/world'
             lane.header.stamp = rospy.Time.now()
         
-	    waypoints = []
+            waypoints = []
             pos_index +=1
-	    for i in range(LOOKAHEAD_WPS):	
-	        index = (pos_index+i)%wp_length
+            for i in range(LOOKAHEAD_WPS):      
+                index = (pos_index+i)%wp_length
                 waypoints.append(self.base_waypoints[index])
-		if (self.traffic_position):
-		    if (self.traffic_position is not -1):
+                if (self.traffic_position):
+                    if (self.traffic_position is not -1):
 
-			delta_s = (self.traffic_position-4) - (pos_index+i)
-			if abs(delta_s%wp_length) < abs(delta_s):
-			    delta_s = delta_s%wp_length
-			delta_s = max(delta_s, 0)
-			safe_speed = math.sqrt(2*2*delta_s)
-			set_speed = min(self.target_speed, safe_speed)
-			self.set_waypoint_velocity(waypoints, i, set_speed)
-		    else:
-			self.set_waypoint_velocity(waypoints, i, self.target_speed)
-		else:
-		    #if haven't got traffic condition, wait for safty reason
-		    self.set_waypoint_velocity(waypoints, i, 0) 
+                        delta_s = (self.traffic_position-4) - (pos_index+i)
+                        if abs(delta_s%wp_length) < abs(delta_s):
+                            delta_s = delta_s%wp_length
+                        delta_s = max(delta_s, 0)
+                        safe_speed = math.sqrt(2*2*delta_s)
+                        set_speed = min(self.target_speed, safe_speed)
+                        self.set_waypoint_velocity(waypoints, i, set_speed)
+                    else:
+                        self.set_waypoint_velocity(waypoints, i, self.target_speed)
+                else:
+                    #if haven't got traffic condition, wait for safty reason
+                    self.set_waypoint_velocity(waypoints, i, 0) 
             lane.waypoints = waypoints
-	    #publish waypoints  
-	    self.final_waypoints_pub.publish(lane)
+            #publish waypoints  
+            self.final_waypoints_pub.publish(lane)
  
     def waypoints_cb(self, waypoints):
         # TODO: Implement
-	self.base_waypoints = waypoints.waypoints        
+        self.base_waypoints = waypoints.waypoints
+        self.target_speed=self.get_waypoint_velocity(self.base_waypoints[0])        
 
     def traffic_cb(self, position):
         # TODO: Callback for /traffic_waypoint message. Implement
-	self.traffic_position = position.data
+        self.traffic_position = position.data
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
