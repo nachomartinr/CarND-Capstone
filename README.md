@@ -1,6 +1,6 @@
 ### Team DDL
 ---
-#### Notes to reviewers
+
 The team members are
 
 | Member          | Email           |   |
